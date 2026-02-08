@@ -1,16 +1,7 @@
 from flask import Blueprint, request, jsonify
 from supabase import create_client
 from datetime import datetime
-import random
 import os
-
-# IMPORTANT: import the MODULE, not the variable
-import routes.batch as batch_state
-
-# 🔗 Blockchain automation imports
-from routes.hash_readings import hash_reading
-from routes.merkle_tree import merkle_root
-from routes.blockchain import store_merkle_root_on_chain
 
 # -------------------------------
 # Supabase Configuration
@@ -24,105 +15,61 @@ supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 # -------------------------------
 sensors_bp = Blueprint("sensors", __name__)
 
-# -------------------------------
-# In-memory buffer (PER BATCH)
-# -------------------------------
-sensor_buffer = []
-buffer_batch_id = None   # tracks which batch the buffer belongs to
-BATCH_SIZE = 5           # automation trigger
-
-
 # =========================================================
 # POST: Receive sensor data (ESP32 / Simulator)
 # POST /api/sensors/sensor-data
 # =========================================================
 @sensors_bp.route("/sensor-data", methods=["POST"])
 def receive_sensor_data():
-
     data = request.get_json(silent=True)
     if not data:
         return jsonify({"error": "No sensor data received"}), 400
 
     try:
-        active_batch = batch_state.current_batch
+        # 🔐 ALWAYS resolve ACTIVE batch from DATABASE
+        batch_res = supabase.table("batches") \
+            .select("batch_id, status") \
+            .eq("status", "ACTIVE") \
+            .order("start_date", desc=True) \
+            .limit(1) \
+            .execute()
 
-        # 🔴 HARD BLOCK if no active batch
-        if not active_batch:
+        if not batch_res.data:
             return jsonify({
-                "error": "No active batch. Farmer must create a batch first."
+                "error": "No active batch. Create a batch first."
             }), 400
 
-        global sensor_buffer, buffer_batch_id
+        active_batch_id = batch_res.data[0]["batch_id"]
 
-        # 🔁 Reset buffer if batch changed
-        if buffer_batch_id != active_batch:
-            sensor_buffer.clear()
-            buffer_batch_id = active_batch
-
-        # Build full reading
+        # ✅ Build canonical sensor reading
         reading = {
-            "airTemp": data.get("airTemp"),
+            "airTemp": data.get("airTemp") or data.get("temperature"),
             "humidity": data.get("humidity"),
-            "soilMoisture": data.get("soilMoisture"),
-            "npk": data.get("npk"),
-            "soilPH": round(random.uniform(6.0, 7.0), 2),
+            "soilMoisture": data.get("soilMoisture") or data.get("soil_moisture"),
+            "npk": data.get("npk") or {
+                "N": data.get("nitrogen"),
+                "P": data.get("phosphorus"),
+                "K": data.get("potassium")
+            },
+            "soilPH": data.get("soilPH"),  # optional
             "timestamp": datetime.utcnow().isoformat()
         }
 
-        # 1️⃣ Add to in-memory buffer
-        sensor_buffer.append(reading)
-        print(f"📦 Buffer size: {len(sensor_buffer)} | Batch: {active_batch}")
-
-        # 2️⃣ Store raw reading (off-chain)
+        # 🔒 Store reading OFF-CHAIN (cloud only)
         supabase.table("harvest_data").insert({
-            "batch_id": active_batch,
-            "sensor_data": [reading],
+            "batch_id": active_batch_id,
+            "sensor_data": reading,
             "merkle_root": "PENDING",
             "blockchain_tx": "PENDING",
             "network": "sepolia",
             "ph_source": "simulated"
         }).execute()
 
-        blockchain_result = None
-
-        # 3️⃣ AUTOMATION: commit batch to blockchain
-        if len(sensor_buffer) >= BATCH_SIZE:
-            print("🔗 Batch full → generating Merkle root")
-
-            hashes = [hash_reading(r) for r in sensor_buffer]
-            root = merkle_root(hashes)
-
-            tx_hash = store_merkle_root_on_chain(
-                active_batch,
-                "0x" + root.replace("0x", "")
-            )
-
-            print("✅ Merkle root committed")
-            print("🧱 Root:", root)
-            print("🔗 Tx:", tx_hash)
-
-            # Store committed batch snapshot
-            supabase.table("harvest_data").insert({
-                "batch_id": active_batch,
-                "sensor_data": sensor_buffer,
-                "merkle_root": "0x" + root,
-                "blockchain_tx": tx_hash,
-                "network": "sepolia",
-                "ph_source": "simulated"
-            }).execute()
-
-            sensor_buffer.clear()
-            blockchain_result = {
-                "batch_id": active_batch,
-                "merkle_root": root,
-                "tx_hash": tx_hash
-            }
+        print("✅ Sensor data stored under batch:", active_batch_id)
 
         return jsonify({
             "message": "Sensor data received",
-            "active_batch": active_batch,
-            "buffer_size": len(sensor_buffer),
-            "blockchain_commit": blockchain_result
+            "active_batch": active_batch_id
         }), 200
 
     except Exception as e:
@@ -141,7 +88,7 @@ def get_latest_sensor():
     try:
         response = supabase.table("harvest_data") \
             .select("*") \
-            .order("id", desc=True) \
+            .order("created_at", desc=True) \
             .limit(1) \
             .execute()
 
@@ -149,7 +96,7 @@ def get_latest_sensor():
             return jsonify({"error": "No sensor data available"}), 404
 
         row = response.data[0]
-        sensor = row["sensor_data"][0]
+        sensor = row["sensor_data"]
 
         return jsonify({
             "batch_id": row["batch_id"],
@@ -181,6 +128,7 @@ def get_sensor_data_by_batch(batch_id):
         response = supabase.table("harvest_data") \
             .select("*") \
             .eq("batch_id", batch_id) \
+            .order("created_at", desc=False) \
             .execute()
 
         return jsonify(response.data), 200
@@ -190,17 +138,3 @@ def get_sensor_data_by_batch(batch_id):
             "error": "Failed to fetch batch sensor data",
             "details": str(e)
         }), 500
-
-
-# =========================================================
-# GET: Buffer status (debug)
-# GET /api/sensors/buffer
-# =========================================================
-@sensors_bp.route("/buffer", methods=["GET"])
-def get_buffer_status():
-    return jsonify({
-        "buffer_count": len(sensor_buffer),
-        "buffer_batch": buffer_batch_id,
-        "active_batch": batch_state.current_batch,
-        "buffer_preview": sensor_buffer[-3:]
-    }), 200
