@@ -1,0 +1,161 @@
+[
+	{
+		"inputs": [
+			{
+				"internalType": "string",
+				"name": "_batchId",
+				"type": "string"
+			},
+			{
+				"internalType": "string",
+				"name": "_cropName",
+				"type": "string"
+			},
+			{
+				"internalType": "string",
+				"name": "_farmLocation",
+				"type": "string"
+			},
+			{
+				"internalType": "string",
+				"name": "_dataHash",
+				"type": "string"
+			},
+			{
+				"internalType": "enum AgriChain.ChemicalStatus",
+				"name": "_chemical",
+				"type": "uint8"
+			},
+			{
+				"internalType": "bool",
+				"name": "_organicCertified",
+				"type": "bool"
+			},
+			{
+				"internalType": "address",
+				"name": "_farmer",
+				"type": "address"
+			}
+		],
+		"name": "addHarvest",
+		"outputs": [],
+		"stateMutability": "nonpayable",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"stateMutability": "nonpayable",
+		"type": "constructor"
+	},
+	{
+		"anonymous": false,
+		"inputs": [
+			{
+				"indexed": false,
+				"internalType": "string",
+				"name": "batchId",
+				"type": "string"
+			},
+			{
+				"indexed": false,
+				"internalType": "address",
+				"name": "farmer",
+				"type": "address"
+			},
+			{
+				"indexed": false,
+				"internalType": "enum AgriChain.ChemicalStatus",
+				"name": "chemical",
+				"type": "uint8"
+			},
+			{
+				"indexed": false,
+				"internalType": "uint256",
+				"name": "timestamp",
+				"type": "uint256"
+			}
+		],
+		"name": "HarvestRecorded",
+		"type": "event"
+	},
+	{
+		"inputs": [
+			{
+				"internalType": "string",
+				"name": "_batchId",
+				"type": "string"
+			}
+		],
+		"name": "getHarvest",
+		"outputs": [
+			{
+				"internalType": "string",
+				"name": "batchId",
+				"type": "string"
+			},
+			{
+				"internalType": "string",
+				"name": "cropName",
+				"type": "string"
+			},
+			{
+				"internalType": "string",
+				"name": "farmLocation",
+				"type": "string"
+			},
+			{
+				"internalType": "string",
+				"name": "dataHash",
+				"type": "string"
+			},
+			{
+				"internalType": "uint256",
+				"name": "timestamp",
+				"type": "uint256"
+			},
+			{
+				"internalType": "address",
+				"name": "farmer",
+				"type": "address"
+			},
+			{
+				"internalType": "enum AgriChain.ChemicalStatus",
+				"name": "chemical",
+				"type": "uint8"
+			},
+			{
+				"internalType": "bool",
+				"name": "organicCertified",
+				"type": "bool"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "getTotalBatches",
+		"outputs": [
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	},
+	{
+		"inputs": [],
+		"name": "owner",
+		"outputs": [
+			{
+				"internalType": "address",
+				"name": "",
+				"type": "address"
+			}
+		],
+		"stateMutability": "view",
+		"type": "function"
+	}
+]
