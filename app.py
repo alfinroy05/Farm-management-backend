@@ -42,6 +42,8 @@ app.register_blueprint(predict_bp, url_prefix="/api")
 app.register_blueprint(blockchain_bp, url_prefix="/api/blockchain")
 app.register_blueprint(trace_bp, url_prefix="/api")
 app.register_blueprint(batch_bp, url_prefix="/api")
+from routes.otp import otp_bp
+app.register_blueprint(otp_bp, url_prefix="/api")
 
 # ---------------------------------
 # Health Check
