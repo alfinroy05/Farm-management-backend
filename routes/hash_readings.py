@@ -3,7 +3,16 @@ import hashlib
 
 def hash_reading(reading: dict) -> str:
     """
-    Hash a single sensor reading deterministically
+    Deterministically hash a single sensor reading.
+    - Stable ordering
+    - No whitespace ambiguity
+    - Safe for Merkle trees & blockchain verification
     """
-    encoded = json.dumps(reading, sort_keys=True).encode()
-    return hashlib.sha256(encoded).hexdigest()
+
+    normalized = json.dumps(
+        reading,
+        sort_keys=True,
+        separators=(",", ":")
+    )
+
+    return hashlib.sha256(normalized.encode("utf-8")).hexdigest()

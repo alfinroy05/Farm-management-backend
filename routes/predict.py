@@ -1,15 +1,15 @@
-from flask import Blueprint, jsonify
+from flask import Blueprint, jsonify, request
 from supabase import create_client
 import joblib
 import numpy as np
-import pandas as pd   # ✅ ADDED
+import pandas as pd
 import os
 
 # -------------------------------
-# Supabase Configuration
+# Supabase Configuration (KEPT)
 # -------------------------------
-SUPABASE_URL = "https://cxpusibdyaxtkgxgenvu.supabase.co"
-SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN4cHVzaWJkeWF4dGtneGdlbnZ1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjYzMTY1OTgsImV4cCI6MjA4MTg5MjU5OH0.2RUYwpK6n_4XC6iqzK1fJricYeEA93wJ9cgzAEFKhLk"
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
@@ -44,38 +44,30 @@ disease_encoder = joblib.load(
 def predict_crop_health():
     """
     Frontend triggers prediction.
-    Latest sensor data is fetched automatically from Supabase.
+    ML inference is performed on frontend-provided
+    batch-specific sensor data.
     """
 
     # ------------------------------------
-    # Fetch latest sensor data from Supabase
+    # Read sensor data from frontend (FIX)
     # ------------------------------------
-    response = (
-        supabase
-        .table("sensor_data")
-        .select("*")
-        .order("created_at", desc=True)
-        .limit(1)
-        .execute()
-    )
+    data = request.json
 
-    if not response.data:
-        return jsonify({"error": "No sensor data available"}), 404
-
-    sensor = response.data[0]
+    if not data:
+        return jsonify({"error": "No input data received"}), 400
 
     try:
         # ------------------------------------
-        # Prepare ML input (FIXED ✅)
+        # Prepare ML input
         # ------------------------------------
         input_features = pd.DataFrame([{
-            "temperature": float(sensor.get("temperature", 0)),
-            "humidity": float(sensor.get("humidity", 0)),
-            "soilMoisture": float(sensor.get("soilMoisture", 0)),
-            "ph": float(sensor.get("ph", 0)),
-            "nitrogen": float(sensor.get("nitrogen", 0)),
-            "phosphorus": float(sensor.get("phosphorus", 0)),
-            "potassium": float(sensor.get("potassium", 0)),
+            "temperature": float(data.get("temperature", 0)),
+            "humidity": float(data.get("humidity", 0)),
+            "soilMoisture": float(data.get("soilMoisture", 0)),
+            "ph": float(data.get("ph", 6.5)),   # simulated default
+            "nitrogen": float(data.get("nitrogen", 0)),
+            "phosphorus": float(data.get("phosphorus", 0)),
+            "potassium": float(data.get("potassium", 0)),
         }])
 
         # ------------------------------------
@@ -108,7 +100,7 @@ def predict_crop_health():
             "crop_health": crop_health,
             "disease_risk": disease_risk,
             "advisory": advisory,
-            "data_source": "Supabase (Auto)",
+            "data_source": "Frontend (Batch-Aware)",
             "prediction_type": "ML-based"
         }), 200
 
