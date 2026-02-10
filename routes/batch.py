@@ -142,14 +142,13 @@ def _finalize_batch_with_blockchain(batch_id):
 
     for row in response.data:
         if isinstance(row["sensor_data"], list):
-            readings.extend(row["sensor_data"])  # ✅ FLATTEN
+            readings.extend(row["sensor_data"])
         else:
             readings.append(row["sensor_data"])
 
     if not readings:
         raise Exception("No sensor data found for batch")
 
-    # Build Merkle tree
     hashes = [hash_reading(r) for r in readings]
     root = merkle_root(hashes)
 
@@ -158,7 +157,6 @@ def _finalize_batch_with_blockchain(batch_id):
         "0x" + root
     )
 
-    # Update batch metadata
     supabase.table("batches").update({
         "status": "FINALIZED",
         "end_date": datetime.utcnow().isoformat(),
@@ -166,7 +164,6 @@ def _finalize_batch_with_blockchain(batch_id):
         "blockchain_tx": tx_hash
     }).eq("batch_id", batch_id).execute()
 
-    # Update all readings
     supabase.table("harvest_data").update({
         "merkle_root": "0x" + root,
         "blockchain_tx": tx_hash
@@ -176,15 +173,23 @@ def _finalize_batch_with_blockchain(batch_id):
 
 
 # =========================================================
-# POST: Finalize Batch
+# POST: Finalize Batch (OTP PROTECTED)
 # =========================================================
 @batch_bp.route("/batch/finalize", methods=["POST"])
 def finalize_batch():
     data = request.get_json()
+
     batch_id = data.get("batch_id")
+    otp_verified = data.get("otp_verified")  # 🔐 NEW (OTP gate)
 
     if not batch_id:
         return jsonify({"error": "Batch ID is required"}), 400
+
+    # 🔐 OTP SECURITY CHECK (NO OTP → NO FINALIZE)
+    if otp_verified is not True:
+        return jsonify({
+            "error": "OTP verification required before finalizing batch"
+        }), 403
 
     try:
         batch = supabase.table("batches") \
